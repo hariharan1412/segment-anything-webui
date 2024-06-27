@@ -43,7 +43,7 @@ function Workspace() {
       case 'click': {
         if (points.length === 0) return
         const fromData = new FormData()
-        fromData.append('file', new File([data.file], 'image.png'))
+        fromData.append('file', new File([data.file], data.file.name))
         const points_list = points.map((p) => {
           return {
             x: Math.round(p.x),
@@ -79,7 +79,7 @@ function Workspace() {
         if (!ready) return
         if (points.length !== 2) return
         const fromData = new FormData()
-        fromData.append('file', new File([data.file], 'image.png'))
+        fromData.append('file', new File([data.file], data.file.name))
         fromData.append('box', JSON.stringify(
           {
             x1: Math.round(points[0].x),

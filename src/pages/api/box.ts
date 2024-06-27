@@ -24,6 +24,9 @@ export default async function handler(
     if (fields['box']) {
         req_data.append('box', fields['box'][0] as string)
     }
+
+    req_data.append('file_name' , JSON.stringify(files) as any )
+
     const res_data = await fetch(
         utils.config.API_URL + '/api/box',
         {

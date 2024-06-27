@@ -8,7 +8,7 @@ import uvicorn
 import clip
 
 import export_onnx_model
-from fastapi import FastAPI, File, Form
+from fastapi import FastAPI, File, Form, UploadFile
 from pydantic import BaseModel
 from typing import Sequence, Callable
 from segment_anything import SamPredictor, SamAutomaticMaskGenerator, sam_model_registry
@@ -16,11 +16,14 @@ from PIL import Image
 from typing_extensions import Annotated
 from threading import Lock
 
+import json 
+
+
+from test_mask import print_mask
 
 class Point(BaseModel):
     x: int
     y: int
-
 
 class Points(BaseModel):
     points: Sequence[Point]
@@ -65,12 +68,17 @@ def retrieve(
 
 @click.command()
 @click.option('--model',
-              default='vit_b',
+              default='vit_h',
               help='model name',
               type=click.Choice(['vit_b', 'vit_l', 'vit_h']))
-@click.option('--model_path', default='model/sam_vit_b_01ec64.pth', help='model path')
+
+# @click.option('--model_path', default='model/sam_vit_b_01ec64.pth', help='model path')
+
+@click.option('--model_path', default='model/sam_vit_h_4b8939.pth', help='model path')
+
 @click.option('--port', default=8000, help='port')
 @click.option('--host', default='0.0.0.0', help='host')
+
 def main(model, model_path, port, host, ):
     device = torch.device("cpu")
     try:
@@ -112,18 +120,31 @@ def main(model, model_path, port, host, ):
             [f"{c}{'T' if v else 'F'}" for c, v in zip(counts, values)])
         return compressed
 
+
     @app.post('/api/point')
     async def api_points(
-            file: Annotated[bytes, File()],
+            file: Annotated[UploadFile, File()],
             points: Annotated[str, Form(...)],
+            file_name: Annotated[str, Form(...)],
+            fields: Annotated[str, Form(...)],
+            form: Annotated[str, Form(...)],
     ):
+
+        file_contents = await file.read()
+            
         ps = Points.parse_raw(points)
         input_points = np.array([[p.x, p.y] for p in ps.points])
         input_labels = np.array(ps.points_labels)
-        image_data = Image.open(io.BytesIO(file))
+
+        image_data = Image.open(io.BytesIO(file_contents))
         image_array = np.array(image_data)
+        file_name_content = json.loads(file_name)
+        
+        file_name_ = file_name_content['file'][0]["originalFilename"]
+
         with sam_model_lock:
             predictor.set_image(image_array)
+        
             masks, scores, logits = predictor.predict(
                 point_coords=input_points,
                 point_labels=input_labels,
@@ -140,12 +161,16 @@ def main(model, model_path, port, host, ):
             for idx, mask in enumerate(masks)
         ]
         masks = sorted(masks, key=lambda x: x['stability_score'], reverse=True)
+
+        print_mask(mask_seg=masks, file_name=file_name_ , method_type="click")
+
         return {"code": 0, "data": masks[:]}
 
     @app.post('/api/box')
     async def api_box(
         file: Annotated[bytes, File()],
         box: Annotated[str, Form(...)],
+        file_name: Annotated[str, Form(...)],
     ):
         b = Box.parse_raw(box)
         input_box = np.array([b.x1, b.y1, b.x2, b.y2])
@@ -168,6 +193,12 @@ def main(model, model_path, port, host, ):
             for idx, mask in enumerate(masks)
         ]
         masks = sorted(masks, key=lambda x: x['stability_score'], reverse=True)
+        
+        file_name_content = json.loads(file_name)
+        file_name_ = file_name_content['file'][0]["originalFilename"]
+
+        print_mask(mask_seg=masks, file_name=file_name_, method_type="box")
+
         return {"code": 0, "data": masks[:]}
 
     @app.post('/api/everything')

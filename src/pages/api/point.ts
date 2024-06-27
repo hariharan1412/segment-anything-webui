@@ -15,15 +15,21 @@ export const config = {
 export default async function handler(
     req: NextApiRequest,
     res: NextApiResponse<Response>) {
-    const { fields, files } = await utils_api.parser_fields_and_file(req)
+    const { fields, files , form} = await utils_api.parser_fields_and_file(req)
     const file_list = files['file'] as formidable.File[]
     const filepath = file_list[0]['filepath']
     const readStream = await fs.readFile(filepath)
     const req_data = new FormData()
+
+    
     req_data.append('file', new Blob([readStream]), 'image')
     if (fields['points']) {
         req_data.append('points', fields['points'][0] as string)
     }
+    
+    req_data.append('fields' , JSON.stringify(fields)  as any )
+    req_data.append('file_name' , JSON.stringify(files) as any )
+    req_data.append('form' , JSON.stringify(form) as any )
 
     const req_stream = req.read()
     const res_data = await fetch(
